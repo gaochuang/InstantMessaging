@@ -1,17 +1,32 @@
 package server
 
 import (
+	"IM/user"
 	"fmt"
 	"net"
+	"sync"
 )
 
 type Server struct {
 	IP   string
 	port int
+
+	//online user
+	OnlineMap map[string]*user.User
+	MapLock   sync.RWMutex
+
+	//广播channel
+	Message chan string
 }
 
 func NewServer(ip string, port int) *Server {
-	return &Server{IP: ip, port: port}
+
+	server := &Server{IP: ip, port: port,
+		OnlineMap: make(map[string]*user.User),
+		Message:   make(chan string),
+	}
+
+	return server
 }
 
 func (this *Server) serverHandle(conn net.Conn) {
