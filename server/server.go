@@ -3,6 +3,7 @@ package server
 import (
 	"IM/user"
 	"fmt"
+	"io"
 	"net"
 	"sync"
 )
@@ -55,6 +56,29 @@ func (this *Server) serverHandle(conn net.Conn) {
 	this.MapLock.Unlock()
 
 	this.BroadCast(user, "online now")
+
+	go func() {
+		buf := make([]byte, 4096)
+		for {
+			n, err := conn.Read(buf)
+			if n == 0 {
+				this.BroadCast(user, "offline now")
+				return
+			}
+			//EOF文件末尾
+			if err != nil && err != io.EOF {
+				fmt.Println("read failed, err: ", err)
+				return
+			}
+
+			//去掉\n
+			msg := string(buf[:n-1])
+
+			//广播
+			this.BroadCast(user, msg)
+		}
+
+	}()
 
 	select {}
 }
