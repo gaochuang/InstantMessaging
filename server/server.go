@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strings"
 	"sync"
 )
 
@@ -49,14 +50,35 @@ func (this *Server) BroadCast(user *user.User, msg string) {
 	this.Message <- sendMsg
 }
 
+func (this *Server) SendMsg(user *user.User, msg string) {
+	user.Conn.Write([]byte(msg))
+}
+
 func (this *Server) HandlerMessage(msg string, user *user.User) {
 	if msg == "who" {
 		this.MapLock.Lock()
 		for _, user := range this.OnlineMap {
 			onlineMsg := "[" + user.Addr + "]" + user.Name + ":" + "online"
-			user.Conn.Write([]byte(onlineMsg))
+			this.SendMsg(user, onlineMsg)
 		}
 		this.MapLock.Unlock()
+	} else if len(msg) > 7 && msg[:7] == "rename|" {
+
+		newName := strings.Split(msg, "|")[1]
+
+		_, ok := this.OnlineMap[newName]
+		if ok {
+			this.SendMsg(user, "user already exist")
+		} else {
+			this.MapLock.Lock()
+			delete(this.OnlineMap, user.Name)
+			user.Name = newName
+			this.OnlineMap[newName] = user
+			this.MapLock.Unlock()
+
+			this.SendMsg(user, "update user name successful "+newName+"\n")
+
+		}
 	} else {
 
 		//广播
