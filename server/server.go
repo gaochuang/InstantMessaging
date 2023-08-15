@@ -49,6 +49,20 @@ func (this *Server) BroadCast(user *user.User, msg string) {
 	this.Message <- sendMsg
 }
 
+func (this *Server) HandlerMessage(msg string, user *user.User) {
+	if msg == "who" {
+		this.MapLock.Lock()
+		for _, user := range this.OnlineMap {
+			onlineMsg := "[" + user.Addr + "]" + user.Name + ":" + "online"
+			user.Conn.Write([]byte(onlineMsg))
+		}
+		this.MapLock.Unlock()
+	} else {
+
+		//广播
+		this.BroadCast(user, msg)
+	}
+}
 func (this *Server) serverHandle(conn net.Conn) {
 	user := user.NewUser(conn)
 	this.MapLock.Lock()
@@ -70,12 +84,9 @@ func (this *Server) serverHandle(conn net.Conn) {
 				fmt.Println("read failed, err: ", err)
 				return
 			}
-
 			//去掉\n
 			msg := string(buf[:n-1])
-
-			//广播
-			this.BroadCast(user, msg)
+			this.HandlerMessage(msg, user)
 		}
 
 	}()
