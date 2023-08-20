@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"runtime"
 	"strings"
 	"sync"
+	"time"
 )
 
 type Server struct {
@@ -79,6 +81,26 @@ func (this *Server) HandlerMessage(msg string, user *user.User) {
 			this.SendMsg(user, "update user name successful "+newName+"\n")
 
 		}
+	} else if len(msg) > 4 && msg[:3] == "to|" {
+		remoteName := strings.Split(msg, "|")[1]
+		if remoteName == "" {
+			this.SendMsg(user, "message format error, please use \"to|Bob|hello\"format\n")
+			return
+		}
+		remoteUser, ok := this.OnlineMap[remoteName]
+		if !ok {
+			this.SendMsg(user, "user doesn't exit")
+			return
+		}
+
+		content := strings.Split(msg, "|")[2]
+		if content == "" {
+			this.SendMsg(user, "the message is empty, please send again")
+			return
+		}
+
+		msg := user.Name + "said to you" + content
+		remoteUser.Conn.Write([]byte(msg))
 	} else {
 
 		//广播
@@ -92,6 +114,8 @@ func (this *Server) serverHandle(conn net.Conn) {
 	this.MapLock.Unlock()
 
 	this.BroadCast(user, "online now")
+
+	isLive := make(chan bool)
 
 	go func() {
 		buf := make([]byte, 4096)
@@ -109,11 +133,27 @@ func (this *Server) serverHandle(conn net.Conn) {
 			//去掉\n
 			msg := string(buf[:n-1])
 			this.HandlerMessage(msg, user)
+			isLive <- true
 		}
 
 	}()
 
-	select {}
+	for {
+		select {
+
+		//isLive必须在上面，因为isLive不触发，设置定时器也会执行
+		case <-isLive:
+			//当前用户活跃应该重置定时器，为了激活select更新定时器
+
+		case <-time.After(10 * time.Second):
+			//定时器超时，将用户提出
+			this.SendMsg(user, "you were forced offline")
+			close(user.C)
+			conn.Close()
+			runtime.Goexit()
+		}
+	}
+
 }
 
 func (this *Server) StartServer() error {
